@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Doodle Board</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Bubblegum+Sans&display=swap" rel="stylesheet">
+    <style>
+        canvas {
+            border: 1px solid black;
+            display: block;
+            margin: 20px auto;
+            cursor: crosshair;
+        }
+
+        body {
+            font-family: 'Bubblegum Sans', cursive;
+        }
+
+        h1,
+        button,
+        label {
+            font-family: 'Bubblegum Sans', cursive;
+        }
+
+        .timer-container {
+            margin-bottom: 20px;
+        }
+
+        #timerDisplay {
+            font-weight: bold;
+            margin-top: 10px;
+        }
+
+        #timerInput {
+            margin-top: 10px;
+            text-align: center;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container text-center">
+        <h1 class="mt-4">Enhanced Doodle Board</h1>
+        <div class="controls mb-3">
+            <label for="color">Brush Color:</label>
+            <input type="color" id="color" value="#000000">
+            <label for="size">Brush Size:</label>
+            <input type="number" id="size" min="1" max="20" value="5">
+
+            <!-- Tool Buttons -->
+            <button id="eraser" class="btn btn-light">Eraser</button>
+            <button id="regular" class="btn btn-info">🖌️ Regular Brush</button>
+            <button id="pen" class="btn btn-primary">🖊️ Pen</button>
+            <button id="pencil" class="btn btn-secondary">✏️ Pencil</button>
+            <button id="airbrush" class="btn btn-warning">🎨 Airbrush</button>
+            <button id="clear" class="btn btn-danger">Clear</button>
+            <button id="save" class="btn btn-success">Save</button>
+        </div>
+
+        <canvas id="doodleCanvas" width="500" height="400"></canvas>
+
+        <div class="timer-container">
+            <p id="note" class="fs-4 text-primary">🎯 Try to beat the timer!</p>
+            <div class="timer fs-2 text-danger" id="timerDisplay">00:30</div>
+            <input id="timerInput" type="number" class="form-control w-25 mx-auto" placeholder="Set Timer (seconds)"
+                min="1" />
+            <button id="startTimer" class="btn btn-success mt-2">Start Timer</button>
+            <button id="stopTimer" class="btn btn-danger mt-2">Stop Timer</button>
+        </div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('doodleCanvas');
+        const ctx = canvas.getContext('2d');
+
+        let timerDuration = 30; // 30 seconds
+        let timerInterval; // Variable to store the interval ID
+
+
+        const timerDisplay = document.getElementById('timerDisplay');
+        const startTimerButton = document.getElementById('startTimer');
+        const stopTimerButton = document.getElementById('stopTimer');
+        const timerInput = document.getElementById('timerInput');
+
+        let currentTool = 'regular'; // Default tool
+        const colorPicker = document.getElementById('color');
+        const sizePicker = document.getElementById('size');
+        const regularButton = document.getElementById('regular');
+        const penButton = document.getElementById('pen');
+        const pencilButton = document.getElementById('pencil');
+        const airbrushButton = document.getElementById('airbrush');
+        const eraserButton = document.getElementById('eraser');
+        const clearButton = document.getElementById('clear');
+        const saveButton = document.getElementById('save');
+
+        let drawing = false;
+
+        // Cursor styles for each tool
+        const cursors = {
+            regular: 'url("https://img.icons8.com/?size=32&id=49166&format=png"), auto', // Resized to 64px
+            pen: 'url("https://img.icons8.com/?size=32&id=2025&format=png"), auto',      // Resized to 64px
+            pencil: 'url("https://img.icons8.com/?size=32&id=11737&format=png"), auto',  // Resized to 64px
+            airbrush: 'url("https://img.icons8.com/?size=32&id=49166&format=png"), auto',// Resized to 64px
+            eraser: 'url("https://img.icons8.com/?size=32&id=1061&format=png"), auto',   // Resized to 64px
+        };
+
+        // Tool Switchers
+        regularButton.addEventListener('click', () => switchTool('regular'));
+        penButton.addEventListener('click', () => switchTool('pen'));
+        pencilButton.addEventListener('click', () => switchTool('pencil'));
+        airbrushButton.addEventListener('click', () => switchTool('airbrush'));
+        eraserButton.addEventListener('click', () => switchTool('eraser'));
+
+        // Start Timer Functionality
+        startTimerButton.addEventListener('click', () => {
+            // Get the duration from the input field
+            const inputDuration = parseInt(timerInput.value, 10);
+            if (!isNaN(inputDuration) && inputDuration > 0) {
+                timerDuration = inputDuration; // Update timer duration
+            }
+            resetTimer(); // Ensure no overlapping timers
+            startTimer(timerDuration);
+        });
+
+        // Stop Timer Functionality
+        stopTimerButton.addEventListener('click', () => {
+            stopTimer();
+        });
+
+        // Canvas Drawing
+        canvas.addEventListener('mousedown', () => drawing = true);
+        canvas.addEventListener('mouseup', () => {
+            drawing = false;
+            ctx.beginPath(); // Reset path for smooth drawing
+        });
+        canvas.addEventListener('mousemove', draw);
+
+        function draw(e) {
+            if (!drawing) return;
+
+            const x = e.offsetX;
+            const y = e.offsetY;
+
+            if (currentTool === 'regular') {
+                drawRegular(x, y);
+            } else if (currentTool === 'pen') {
+                drawPen(x, y);
+            } else if (currentTool === 'pencil') {
+                drawPencil(x, y);
+            } else if (currentTool === 'airbrush') {
+                drawAirbrush(x, y);
+            } else if (currentTool === 'eraser') {
+                erase(x, y);
+            }
+        }
+        // Regular Brush: Smooth, solid lines
+        function drawRegular(x, y) {
+            ctx.lineWidth = sizePicker.value;
+            ctx.strokeStyle = colorPicker.value;
+            ctx.lineCap = 'round';
+            ctx.lineTo(x, y);
+            ctx.stroke();
+            ctx.beginPath();
+            ctx.moveTo(x, y);
+        }
+
+        // Pen Tool: Similar to Regular but thinner and solid
+        function drawPen(x, y) {
+            ctx.lineWidth = sizePicker.value;
+            ctx.strokeStyle = colorPicker.value;
+            ctx.lineCap = 'square'; // Square cap for sharper edges
+            ctx.lineTo(x, y);
+            ctx.stroke();
+            ctx.beginPath();
+            ctx.moveTo(x, y);
+        }
+
+        // Pencil Tool: Transparent effect
+        function drawPencil(x, y) {
+            ctx.lineWidth = sizePicker.value;
+            ctx.strokeStyle = colorPicker.value;
+            ctx.globalAlpha = 0.3; // Transparency for soft strokes
+            ctx.lineTo(x, y);
+            ctx.stroke();
+            ctx.beginPath();
+            ctx.moveTo(x, y);
+            ctx.globalAlpha = 1.0; // Reset alpha
+        }
+
+        // Airbrush Tool: Dots scattered around cursor
+        function drawAirbrush(x, y) {
+            const size = sizePicker.value;
+            const density = 30; // Number of dots
+
+            for (let i = 0; i < density; i++) {
+                const offsetX = Math.random() * size - size / 2;
+                const offsetY = Math.random() * size - size / 2;
+                ctx.fillStyle = colorPicker.value;
+                ctx.globalAlpha = 0.5; // Slightly transparent spray
+                ctx.fillRect(x + offsetX, y + offsetY, 1, 1);
+            }
+            ctx.globalAlpha = 1.0; // Reset transparency
+        }
+
+        // Eraser Tool: Draws with the background color to simulate erasing
+        function erase(x, y) {
+            ctx.lineWidth = sizePicker.value;
+            ctx.strokeStyle = '#FFFFFF'; // Assuming the canvas background is white
+            ctx.lineCap = 'round';
+            ctx.lineTo(x, y);
+            ctx.stroke();
+            ctx.beginPath();
+            ctx.moveTo(x, y);
+        }
+
+        // Function to switch tools and update cursor
+        function switchTool(tool) {
+            currentTool = tool;
+            canvas.style.cursor = cursors[tool];
+        }
+
+        // Start Timer
+        function startTimer(duration) {
+            let timeRemaining = duration;
+            timerDisplay.textContent = formatTime(timeRemaining);
+
+            timerInterval = setInterval(() => {
+                timeRemaining -= 1;
+                timerDisplay.textContent = formatTime(timeRemaining);
+
+                if (timeRemaining <= 0) {
+                    clearInterval(timerInterval);
+                    alert("Time's up! Great job!");
+                }
+            }, 1000);
+        }
+
+        // Stop Timer
+        function stopTimer() {
+            clearInterval(timerInterval);
+        }
+
+        // Reset Timer
+        function resetTimer() {
+            clearInterval(timerInterval);
+            timerDisplay.textContent = formatTime(timerDuration);
+        }
+
+        function formatTime(seconds) {
+            const mins = Math.floor(seconds / 60);
+            const secs = seconds % 60;
+            return `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+        }
+
+
+        // Clear the canvas
+        clearButton.addEventListener('click', () => ctx.clearRect(0, 0, canvas.width, canvas.height));
+
+
+        // Save the canvas
+        saveButton.addEventListener('click', () => {
+            const link = document.createElement('a');
+            link.download = 'doodle.png';
+            link.href = canvas.toDataURL();
+            link.click();
+        });
+    </script>
+</body>
+
+</html>
